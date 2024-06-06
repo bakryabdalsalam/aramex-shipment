@@ -288,24 +288,28 @@ function aramex_process_refund($order_id) {
 
     try {
         $response = $client->CreateShipments($params);
+        error_log('Aramex API response: ' . print_r($response, true));
         if (!$response->HasErrors) {
             $processed_shipment = $response->Shipments->ProcessedShipment[0];
             $shipment_number = $processed_shipment->ID;
             $url = $processed_shipment->ShipmentLabel->LabelURL;
-
-            // Update order status and add metadata
-            $order->update_status('refunded');
-            $order->update_meta_data('aramex_refund_shipment_number', $shipment_number);
-            $order->update_meta_data('aramex_refund_shipment_label', $url);
-            $order->save();
+            update_wc_order_status($order, $shipment_number, $url);
         } else {
             // Handle errors
-            error_log('Aramex Refund API Error: ' . print_r($response->Notifications, true));
+            error_log('Aramex API Error: ' . print_r($response->Notifications, true));
         }
     } catch (Exception $e) {
         // Handle exception
-        error_log('Aramex Refund API Exception: ' . $e->getMessage());
+        error_log('Aramex API Exception: ' . $e->getMessage());
+    }
+    
+
+function create_aramex_shipment_on_status_change($order_id, $old_status, $new_status, $order) {
+    if ($new_status === 'processing') {
+        error_log('Order status changed to processing for order ID: ' . $order_id);
+        aramex_create_shipment($order_id);
     }
 }
+
 
 
