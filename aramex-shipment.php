@@ -20,7 +20,7 @@ function aramex_add_invoice_meta_box() {
 }
 
 function aramex_invoice_meta_box_callback($post) {
-    $shipment_label_url = get_post_meta($post->ID, 'alameed_shipment_label', true);
+    $shipment_label_url = get_post_meta($post->ID, 'aramex_shipment_label', true);
 
     if ($shipment_label_url) {
         echo '<a href="' . esc_url($shipment_label_url) . '" target="_blank" class="button button-primary">' . __('Download Aramex Invoice', 'woocommerce') . '</a>';
@@ -160,9 +160,9 @@ function update_wc_order_status($order, $shipment_number, $url) {
     }
 
     $order->update_status($new_status);
-    $order->update_meta_data('alameed_delivered', 'false');
-    $order->update_meta_data('alameed_shipment_label', $url); // Save the shipment label URL
-    $order->update_meta_data('ced_aramex_awno', $shipment_number);
+    $order->update_meta_data('aramex_delivered', 'false');
+    $order->update_meta_data('aramex_shipment_label', $url); // Save the shipment label URL
+    $order->update_meta_data('aramex_awno', $shipment_number);
     $order->save();
 }
 
@@ -288,28 +288,23 @@ function aramex_process_refund($order_id) {
 
     try {
         $response = $client->CreateShipments($params);
-        error_log('Aramex API response: ' . print_r($response, true));
         if (!$response->HasErrors) {
             $processed_shipment = $response->Shipments->ProcessedShipment[0];
             $shipment_number = $processed_shipment->ID;
             $url = $processed_shipment->ShipmentLabel->LabelURL;
-            update_wc_order_status($order, $shipment_number, $url);
+
+            // Update order status and add metadata
+            $order->update_status('refunded');
+            $order->update_meta_data('aramex_refund_shipment_number', $shipment_number);
+            $order->update_meta_data('aramex_refund_shipment_label', $url);
+            $order->save();
         } else {
             // Handle errors
-            error_log('Aramex API Error: ' . print_r($response->Notifications, true));
+            error_log('Aramex Refund API Error: ' . print_r($response->Notifications, true));
         }
     } catch (Exception $e) {
         // Handle exception
-        error_log('Aramex API Exception: ' . $e->getMessage());
-    }
-    
-
-function create_aramex_shipment_on_status_change($order_id, $old_status, $new_status, $order) {
-    if ($new_status === 'processing') {
-        error_log('Order status changed to processing for order ID: ' . $order_id);
-        aramex_create_shipment($order_id);
+        error_log('Aramex Refund API Exception: ' . $e->getMessage());
     }
 }
-
-
-
+?>
